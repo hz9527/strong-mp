@@ -1,0 +1,20 @@
+{
+  "name": "strong-mp",
+  "version": "1.0.0",
+  "description": "小程序 api 增强",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hz9527/strong-mp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hz9527/strong-mp/issues"
+  },
+  "homepage": "https://github.com/hz9527/strong-mp#readme"
+}
