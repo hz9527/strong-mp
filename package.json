@@ -16,5 +16,14 @@
   "bugs": {
     "url": "https://github.com/hz9527/strong-mp/issues"
   },
-  "homepage": "https://github.com/hz9527/strong-mp#readme"
+  "homepage": "https://github.com/hz9527/strong-mp#readme",
+  "devDependencies": {
+    "babel-eslint": "^10.0.1",
+    "eslint": "^5.16.0",
+    "eslint-config-airbnb-base": "^13.1.0",
+    "eslint-plugin-import": "^2.17.2",
+    "rollup": "^1.11.3",
+    "rollup-plugin-replace": "^2.2.0",
+    "rollup-plugin-terser": "^4.0.4"
+  }
 }
