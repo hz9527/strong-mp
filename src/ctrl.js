@@ -4,7 +4,7 @@ import { pageMixin, componentMixin } from './mixin';
 class Ctrl {
   map = {}
 
-  instance(app, opt, id) {
+  entry(app, opt, id) {
     this.map[id] = new Reaction(app, opt);
   }
 

@@ -18,9 +18,10 @@ export default class Reaction {
     if (opt.computed) {
       this.computedKeys = Object.keys(opt.computed);
       this.computed = {};
+      app.computed = app.computed || {}; // eslint-disable-line no-param-reassign
       for (let i = 0, l = this.computedKeys.length; i < l; i++) {
         const key = this.computedKeys[i];
-        this.computed[key] = app.computed[key].bind(app);
+        this.computed[key] = opt.computed[key].bind(app);
         Object.defineProperty(app.computed, key, {
           get: () => this.computed[key](this.state),
         });
