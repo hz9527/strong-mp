@@ -7,5 +7,9 @@
     "no-prototype-builtins": 0,
     "no-unused-expressions": [2, { "allowShortCircuit": true, "allowTernary": true }],
     "no-console": 0
+  },
+  "globals": {
+    "Page": true,
+    "Component": true
   }
 }

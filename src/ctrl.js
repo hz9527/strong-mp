@@ -1,10 +1,18 @@
 import Reaction from './reaction';
-import { pageMixin, componentMixin } from './mixin';
 
+const Key = '__id__';
+const WebviewId = '';
 class Ctrl {
   map = {}
 
-  entry(app, opt, id) {
+  entry(id, app, opt) {
+    Object.defineProperty(app, Key, {
+      value: id,
+      configurable: false,
+      set() {
+        console.log('can\'t set value');
+      },
+    });
     this.map[id] = new Reaction(app, opt);
   }
 
@@ -14,19 +22,39 @@ class Ctrl {
     }
   }
 
-  show(id) {}
+  push(app) {
+    const reaction = this.map[app[Key]];
+    reaction && reaction.push();
+  }
 
-  hide(id) {}
+  pop(app) {
+    const reaction = this.map[app[Key]];
+    reaction && reaction.pop();
+  }
+
+  init(app, hook) {
+    this[hook](app[WebviewId], app, app);
+  }
+
+  run(app, hook) {
+    this[hook](app[Key]);
+  }
 }
 
-const ctrl = new Ctrl();
+export const ComponentId = '__componentId__';
+class ComponentCtrl extends Ctrl {
+  options = {}
 
-pageMixin.use({
-  onLoad() {
-    ctrl.add(this, this, this.id);
-  },
-});
+  addOptions(options) {
+    const { data: { [ComponentId]: id } } = options;
+    this.options[id] = options;
+  }
 
-componentMixin.use({
+  init(app, hook) {
+    const { data: { [ComponentId]: id } } = app;
+    this[hook](id, app, this.options[id] || {});
+  }
+}
+export const pageCtrl = new Ctrl();
 
-});
+export const componentCtrl = new ComponentCtrl();

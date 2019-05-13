@@ -1,24 +1,27 @@
 /* eslint-disable no-param-reassign */
+import { ComponentId } from './ctrl';
+
+const noop = () => {};
 function warpper(fn, user) {
   return function warpperFn(...args) {
-    user.start(this);
+    user.push(this);
     const result = fn(...args);
-    user.end(this);
+    user.pop(this);
     return result;
   };
 }
 
-function beforeWarpper(fn, user) {
+function beforeWarpper(fn, user, hook) {
   return function warpperFn(...args) {
-    user.before(this);
+    hook === 'entry' ? user.init(this, hook) : user.run(this, hook);
     return fn(...args);
   };
 }
 
-function afterWarpper(fn, user) {
+function afterWarpper(fn, user, hook) {
   return function warpperFn(...args) {
     const result = fn(...args);
-    user.after(this);
+    user.run(this, hook);
     return result;
   };
 }
@@ -53,6 +56,25 @@ function warpperMethods(methods, user, checker = key => /(h|H)andler/.test(key))
     }
   }
 }
+
+function warpperLife(options, key, hook, user, isComponent, isAfter = false) {
+  let obj = options;
+  if (!isComponent) {
+    if (typeof options[key] !== 'function') {
+      options[key] = noop;
+    }
+  } else {
+    const isLife = typeof options[key] !== 'function';
+    if (options.lifetimes && typeof options.lifetimes[key] !== 'function' && isLife) {
+      !options.lifetimes && (options.lifetimes = {});
+      options.lifetimes[key] = noop;
+    }
+    obj = isLife ? options.lifetimes : options;
+  }
+  obj[key] = isAfter ? afterWarpper(obj[key], user, hook) : beforeWarpper(obj[key], user, hook);
+}
+let id = 0;
+
 class Warpper {
   constructor(conf) {
     this.config = conf;
@@ -65,6 +87,10 @@ class Warpper {
   resolve(options) {
     if (!options.data) {
       options.data = {};
+    }
+    if (this.config.isComponent) {
+      options.data[ComponentId] = ++id;
+      this.ctrl.addOptions(options);
     }
     if (options.computed) {
       let context = options;
@@ -99,14 +125,13 @@ class Warpper {
     for (let i = 0, l = this.config.hooks.length; i < l; i++) {
       handler(options, this.config.hooks[i]);
     }
-    //     const {
-    //  entry, show, hide, destroy
-    //  } = this.config;
-    //     if (this.config.isComponent) {
-    //       //
-    //     } else {
-    //       options.entry;
-    //     }
+    const {
+      entry, show, hide, destroy,
+    } = this.config;
+    warpperLife(options, entry, 'entry', this.ctrl, this.config.isComponent);
+    warpperLife(options, show, 'show', this.ctrl, this.config.isComponent);
+    warpperLife(options, hide, 'hide', this.ctrl, this.config.isComponent);
+    warpperLife(options, destroy, 'destroy', this.ctrl, this.config.isComponent, true);
     return options;
   }
 }
