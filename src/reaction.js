@@ -9,18 +9,17 @@ export default class Reaction {
     this.tree = new Tree();
     this.cbs = [];
     this.runCbs = this.runCbs.bind(this);
-    this.effect = (() => {
-      let cur = this.state;
-      return (key, value, isArray, isLeaf) => {
-        if (!isLeaf) {
-          if (!cur[key]) isArray ? (cur[key] = []) : (cur[key] = {});
-          cur = cur[key];
-        } else {
-          cur[key] = value;
-          cur = this.state;
-        }
-      };
-    })();
+    this.status = 0; // 0 before onload; 1 onload but not show; -1 hide
+    let cur = this.state;
+    this.effect = (key, value, isArray, isLeaf) => {
+      if (!isLeaf) {
+        if (!cur[key]) isArray ? (cur[key] = []) : (cur[key] = {});
+        cur = cur[key];
+      } else {
+        cur[key] = value;
+        cur = this.state;
+      }
+    };
     app.setState = this.setState.bind(this); // eslint-disable-line no-param-reassign
     this.app = app;
     if (opt.computed) {
@@ -52,14 +51,14 @@ export default class Reaction {
 
   setDeepState(keys, value, cb) {
     !this.isRun && (this.isRun = true);
-    // update tree & state
     keys && this.tree.update(keys, value, this.effect);
     typeof cb === 'function' && this.cbs.push(cb);
     this.stack === 0 && this.run();
   }
 
   run() {
-    const data = this._updateComputed(false);
+    this.isRun = false;
+    const data = this.updateComputed();
     const result = this.tree.getValue();
     this.tree.members = {};
     if (data) {
@@ -89,28 +88,40 @@ export default class Reaction {
 
   pop() {
     this.stack--;
-    this.stack === 0 && this.isRun && this.run();
+    this.stack === 0 && this.isRun && this.status !== -1 && this.run();
   }
 
-  updateComputed() {
-    this._updateComputed();
+  show() {
+    this.status !== 0 && this.run();
+    this.status = 1;
   }
 
-  _updateComputed(immediately = true) {
-    this.isRun = false;
+  hide() {
+    this.status = -1;
+  }
+
+  destory() {
+    delete this.app.setState;
+    this.app.computed = null;
+    this.app = null;
+    this.state = null;
+    this.tree = null;
+  }
+
+  updateComputed(first = true) {
     if (!this.computedKeys) return null;
     let data = {};
+    first && this.push(); // 保证了computed 内 setSate 不引发新的 run
     for (let i = 0, l = this.computedKeys.length; i < l; i++) {
       const key = this.computedKeys[i];
       const value = this.computed[key](this.state);
       value !== this.app.data[key] && (data[key] = value);
     }
     if (this.isRun) {
-      data = this._updateComputed(false);
+      this.isRun = false;
+      data = this.updateComputed(false);
     }
-    if (immediately === true) {
-      this.app.setData(data, this.runCbs);
-    }
+    this.stack--;
     return data;
   }
 }
