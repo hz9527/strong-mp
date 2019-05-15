@@ -5,23 +5,34 @@ const noop = () => {};
 function warpper(fn, user) {
   return function warpperFn(...args) {
     user.push(this);
-    const result = fn(...args);
+    const result = fn.call(this, ...args);
     user.pop(this);
     return result;
   };
 }
 
 function beforeWarpper(fn, user, hook) {
-  return function warpperFn(...args) {
-    hook === 'entry' ? user.init(this, hook) : user.run(this, hook);
-    return fn(...args);
+  return hook === 'entry' ? function init(...args) {
+    user.init(this, hook);
+    user.push(this);
+    const result = fn.call(this, ...args);
+    user.pop(this);
+    return result;
+  } : function warpperFn(...args) {
+    user.push(this);
+    user.run(this, hook);
+    const result = fn.call(this, ...args);
+    user.pop(this);
+    return result;
   };
 }
 
 function afterWarpper(fn, user, hook) {
   return function warpperFn(...args) {
-    const result = fn(...args);
+    user.push(this);
+    const result = fn.call(this, ...args);
     user.run(this, hook);
+    user.pop(this);
     return result;
   };
 }
@@ -32,7 +43,7 @@ function resolveComputed(context) {
   const keys = Object.keys(computed);
   for (let i = 0, l = keys.length; i < l; i++) {
     const key = keys[i];
-    if (data.hasOwnPerperty(key) || typeof computed[key] !== 'function') {
+    if (data.hasOwnProperty(key) || typeof computed[key] !== 'function') {
       delete computed[key];
     } else {
       const get = computed[key].bind(context, data);
@@ -138,10 +149,6 @@ class Warpper {
 
 export const pageMixin = new Warpper({
   hooks: [
-    'onLoad',
-    'onShow',
-    'onHide',
-    'onUnload',
     'onReady',
     'onPullDownRefresh',
     'onReachBottom',
@@ -158,10 +165,6 @@ export const pageMixin = new Warpper({
 
 export const componentMixin = new Warpper({
   hooks: [
-    'created',
-    'show',
-    'hide',
-    'detached',
     'attached',
     'ready',
     'moved',

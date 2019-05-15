@@ -2,17 +2,25 @@
 import Tree from './tree';
 
 export default class Reaction {
-  stack = 0
-
-  isRun = false
-
-  state = {}
-
-  tree = new Tree()
-
-  cbs = []
-
   constructor(app, opt) {
+    this.stack = 0;
+    this.isRun = false;
+    this.state = {};
+    this.tree = new Tree();
+    this.cbs = [];
+    this.runCbs = this.runCbs.bind(this);
+    this.effect = (() => {
+      let cur = this.state;
+      return (key, value, isArray, isLeaf) => {
+        if (!isLeaf) {
+          if (!cur[key]) isArray ? (cur[key] = []) : (cur[key] = {});
+          cur = cur[key];
+        } else {
+          cur[key] = value;
+          cur = this.state;
+        }
+      };
+    })();
     app.setState = this.setState.bind(this); // eslint-disable-line no-param-reassign
     this.app = app;
     if (opt.computed) {
@@ -50,22 +58,10 @@ export default class Reaction {
     this.stack === 0 && this.run();
   }
 
-  effect = (() => {
-    let cur = this.state;
-    return (key, value, isArray, isLeaf) => {
-      if (!isLeaf) {
-        if (!cur[key]) isArray ? (cur[key] = []) : (cur[key] = {});
-        cur = cur[key];
-      } else {
-        cur[key] = value;
-        cur = this.state;
-      }
-    };
-  })()
-
   run() {
     const data = this._updateComputed(false);
     const result = this.tree.getValue();
+    this.tree.members = {};
     if (data) {
       const keys = Object.keys(data);
       for (let i = 0, l = keys.length; i < l; i++) {
@@ -73,10 +69,13 @@ export default class Reaction {
         result[key] = data[key];
       }
     }
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('setData:', result);
+    }
     this.app.setData(result, this.runCbs);
   }
 
-  runCbs = () => {
+  runCbs() {
     const list = this.cbs.slice();
     this.cbs.length = 0;
     for (let i = 0, l = list.length; i < l; i++) {

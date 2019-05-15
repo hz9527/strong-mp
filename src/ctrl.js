@@ -1,17 +1,13 @@
 import Reaction from './reaction';
 
 const Key = '__id__';
-const WebviewId = '';
+const WebviewId = '__webviewId__';
 class Ctrl {
-  map = {}
-
   entry(id, app, opt) {
+    this.map = {};
     Object.defineProperty(app, Key, {
       value: id,
-      configurable: false,
-      set() {
-        console.log('can\'t set value');
-      },
+      writable: false,
     });
     this.map[id] = new Reaction(app, opt);
   }
@@ -21,6 +17,10 @@ class Ctrl {
       delete this.map[id];
     }
   }
+
+  show(id) {}
+
+  hide(id) {}
 
   push(app) {
     const reaction = this.map[app[Key]];
@@ -43,7 +43,10 @@ class Ctrl {
 
 export const ComponentId = '__componentId__';
 class ComponentCtrl extends Ctrl {
-  options = {}
+  constructor() {
+    super();
+    this.options = {};
+  }
 
   addOptions(options) {
     const { data: { [ComponentId]: id } } = options;

@@ -5,9 +5,8 @@ class Leaf {
 }
 
 export default class Tree {
-  members = {}
-
-  constructor(isArray) {
+  constructor(isArray = false) {
+    this.members = {};
     this.isArray = isArray;
   }
 
@@ -17,7 +16,7 @@ export default class Tree {
       const key = keys[i];
       effect(key, undefined, false);
       if (cur.constructor === Tree) {
-        !cur.members.hasOwnProperty(key) && (cur.members[key] = new Tree());
+        !cur.members.hasOwnProperty(key) && (cur.members[key] = new Tree(typeof key === 'number'));
         cur = cur.members[key];
       } else { // todo
         cur = cur[key];
@@ -27,7 +26,7 @@ export default class Tree {
     const handler = cur.constructor === Tree
       ? (key, v) => {
         cur.members[key] = new Leaf(v);
-        effect(key, v, cur.isArray, false);
+        effect(key, v, cur.isArray, true);
       }
       : (key, v) => {
         cur[key] = v;
@@ -58,7 +57,7 @@ function getValue(tree, preKey, result) {
     if (child.constructor === Tree) {
       getValue(child, newKey, result);
     } else {
-      result[preKey] = child.value; // eslint-disable-line no-param-reassign
+      result[newKey] = child.value; // eslint-disable-line no-param-reassign
     }
   }
 }

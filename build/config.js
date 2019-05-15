@@ -10,19 +10,23 @@ const baseConfig = {
     plugins: [],
   },
   output: {
-    file: resolve('../dist/index.js'),
     format: 'esm',
   },
 };
 
 function genItem(mpEnv = 'tt', isBuild = false) {
-  const result = { ...baseConfig };
-  result.plugins = result.plugins.slice();
-  result.plugins.push(replacePlugin({
+  const { input, output } = baseConfig;
+  const result = {
+    input: { ...input },
+    output: { ...output },
+  };
+  result.input.plugins = result.input.plugins.slice();
+  result.input.plugins.push(replacePlugin({
     'process.env.MP_ENV': JSON.stringify(mpEnv),
     'process.env.NODE_ENV': JSON.stringify(isBuild ? 'production' : 'development'),
   }));
-  if (isBuild) result.plugins.push(terser());
+  if (isBuild) result.input.plugins.push(terser());
+  result.output.file = resolve(`../dist/index${isBuild ? '' : '.debug'}${mpEnv === 'wx' ? '.wx' : ''}.js`);
   return result;
 }
 
