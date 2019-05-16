@@ -14,6 +14,10 @@ const baseConfig = {
   },
 };
 
+function getBasePath(isBuild) {
+  return isBuild ? '../dist/index' : '../demo/libs/index';
+}
+
 function genItem(mpEnv = 'tt', isBuild = false) {
   const { input, output } = baseConfig;
   const result = {
@@ -26,7 +30,7 @@ function genItem(mpEnv = 'tt', isBuild = false) {
     'process.env.NODE_ENV': JSON.stringify(isBuild ? 'production' : 'development'),
   }));
   if (isBuild) result.input.plugins.push(terser());
-  result.output.file = resolve(`../dist/index${isBuild ? '' : '.debug'}${mpEnv === 'wx' ? '.wx' : ''}.js`);
+  result.output.file = resolve(`${getBasePath(isBuild)}${isBuild ? '' : '.debug'}${mpEnv === 'wx' ? '.wx' : ''}.js`);
   return result;
 }
 

@@ -1,0 +1,5 @@
+<!--index.wxml-->
+<view class="container">
+  <view bind:tap="clickHandler">click</view>
+  {{a}}
+</view>

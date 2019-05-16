@@ -5,23 +5,14 @@ export default class Reaction {
   constructor(app, opt) {
     this.stack = 0;
     this.isRun = false;
-    this.state = {};
     this.tree = new Tree();
     this.cbs = [];
-    this.runCbs = this.runCbs.bind(this);
     this.status = 0; // 0 before onload; 1 onload but not show; -1 hide
-    let cur = this.state;
-    this.effect = (key, value, isArray, isLeaf) => {
-      if (!isLeaf) {
-        if (!cur[key]) isArray ? (cur[key] = []) : (cur[key] = {});
-        cur = cur[key];
-      } else {
-        cur[key] = value;
-        cur = this.state;
-      }
-    };
-    app.setState = this.setState.bind(this); // eslint-disable-line no-param-reassign
     this.app = app;
+    this.cacheState = null;
+    this.runCbs = this.runCbs.bind(this);
+    this.getState = this.getState.bind(this);
+    app.setState = this.setState.bind(this); // eslint-disable-line no-param-reassign
     if (opt.computed) {
       this.computedKeys = Object.keys(opt.computed);
       this.computed = {};
@@ -30,15 +21,21 @@ export default class Reaction {
         const key = this.computedKeys[i];
         this.computed[key] = opt.computed[key].bind(app);
         Object.defineProperty(app.computed, key, {
-          get: () => this.computed[key](this.state),
+          get: () => this.computed[key](this.getState()),
         });
       }
     }
-    this.state = app.data;
+  }
+
+  getState() {
+    if (!this.cacheState) {
+      this.cacheState = this.tree.merge(this.app.data);
+    }
+    return this.cacheState;
   }
 
   setState(newState, cb) {
-    const state = typeof newState === 'function' ? newState(this.state) : newState;
+    const state = typeof newState === 'function' ? newState(this.getState) : newState;
     if (!state) return;
     if (state.constructor === Object) {
       const keys = Object.keys(state);
@@ -50,8 +47,9 @@ export default class Reaction {
   }
 
   setDeepState(keys, value, cb) {
-    !this.isRun && (this.isRun = true);
-    keys && this.tree.update(keys, value, this.effect);
+    this.isRun = true;
+    this.cacheState = null;
+    keys && this.tree.update(keys, value);
     typeof cb === 'function' && this.cbs.push(cb);
     this.stack === 0 && this.run();
   }
@@ -60,7 +58,6 @@ export default class Reaction {
     this.isRun = false;
     const data = this.updateComputed();
     const result = this.tree.getValue();
-    this.tree.members = {};
     if (data) {
       const keys = Object.keys(data);
       for (let i = 0, l = keys.length; i < l; i++) {
@@ -71,6 +68,7 @@ export default class Reaction {
     if (process.env.NODE_ENV !== 'production') {
       console.log('setData:', result);
     }
+    this.tree.members = {};
     this.app.setData(result, this.runCbs);
   }
 
@@ -104,17 +102,19 @@ export default class Reaction {
     delete this.app.setState;
     this.app.computed = null;
     this.app = null;
-    this.state = null;
     this.tree = null;
+    this.cacheState = null;
   }
 
   updateComputed(first = true) {
     if (!this.computedKeys) return null;
     let data = {};
     first && this.push(); // 保证了computed 内 setSate 不引发新的 run
+    const state = this.getState();
     for (let i = 0, l = this.computedKeys.length; i < l; i++) {
       const key = this.computedKeys[i];
-      const value = this.computed[key](this.state);
+      const value = this.computed[key](state);
+      if (this.isRun) break;
       value !== this.app.data[key] && (data[key] = value);
     }
     if (this.isRun) {

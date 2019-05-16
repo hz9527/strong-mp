@@ -139,9 +139,10 @@ class Warpper {
     lifeWapper(options, show, isComponent, showWapper);
     lifeWapper(options, hide, isComponent, hideWapper);
     lifeWapper(options, destroy, isComponent, destoryWarpper);
+    return options;
   }
 }
-export const warpperWarpper = new Warpper({
+export const pageWarpper = new Warpper({
   hooks: [
     'onReady',
     'onPullDownRefresh',
