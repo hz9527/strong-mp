@@ -1,4 +1,4 @@
-import Reaction from "./reaction";
+import Reaction from './reaction';
 
 const weakMap = new WeakMap();
 const noop = () => {};
@@ -30,7 +30,7 @@ function warpper(fn) {
     const result = fn.call(this, ...args);
     reaction.pop();
     return result;
-  }
+  };
 }
 
 function hookWarpper(opt, key) {
@@ -52,7 +52,7 @@ function comHookWarpper(opt, key) {
 function methodsWarpper(methods, checker = key => /(h|H)andler/.test(key)) {
   const keys = Object.keys(methods);
   let i = keys.length;
-  while(i--) {
+  while (i--) {
     const key = keys[i];
     const fn = methods[key];
     if (typeof fn === 'function' && checker(key)) {
@@ -66,7 +66,7 @@ function entryWapper(fn, opt) {
     const reaction = new Reaction(this, opt || this);
     weakMap.set(this, reaction);
     return hook.call(this, ...args);
-  }
+  };
 }
 function lifeWapperFactory(key) {
   return fn => function warpperFn(...args) {
@@ -76,7 +76,7 @@ function lifeWapperFactory(key) {
     const result = fn.call(this, ...args);
     reaction.pop();
     return result;
-  }
+  };
 }
 
 const showWapper = lifeWapperFactory('show');
@@ -88,7 +88,7 @@ function destoryWarpper(fn) {
     const reaction = weakMap.get(this);
     reaction && reaction.destory();
     return result;
-  }
+  };
 }
 
 function lifeWapper(opt, key, isComponent, warpper) {
@@ -106,11 +106,12 @@ class Warpper {
   constructor(config) {
     this.config = config;
   }
+
   resolve(options) {
     if (!options.data) {
       options.data = {};
     }
-    const isComponent = this.config.isComponent;
+    const { isComponent } = this.config;
     let methods = options;
     let hookResolver = hookWarpper;
     if (isComponent) {
@@ -134,7 +135,9 @@ class Warpper {
       hookResolver(options, this.config.hooks[i]);
     }
     // base hooks
-    const { entry, show, hide, destroy } = this.config;
+    const {
+      entry, show, hide, destroy,
+    } = this.config;
     lifeWapper(options, entry, isComponent, entryWapper);
     lifeWapper(options, show, isComponent, showWapper);
     lifeWapper(options, hide, isComponent, hideWapper);
