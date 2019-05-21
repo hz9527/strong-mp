@@ -1,11 +1,9 @@
-import { componentWarpper, pageWarpper } from './warpper';
+import { pageResolver, componentResolver } from './resolve';
 
-export default function init(oldPage = Page, oldComponent = Component) {
-  function page(options) {
-    return oldPage(pageWarpper.resolve(options));
-  }
-  function component(options) {
-    return oldComponent(componentWarpper.resolve(options));
-  }
-  return { page, component };
+export function pageHandler(opt) {
+  return pageResolver.resolve(opt);
+}
+
+export function componentHander(opt) {
+  return componentResolver.resolve(opt);
 }

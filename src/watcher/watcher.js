@@ -1,12 +1,17 @@
 import { Tree, Leaf } from './tree';
 import { remove } from '../utils';
 
-class Watcher {
-  constructor(getter, cb, deep = false) {
+let id = 0;
+export class Watcher {
+  constructor(opt) {
+    this.id = ++id;
+    const {
+      getter, cb, deep, lazy,
+    } = opt;
     this.getter = getter;
     this.cb = cb;
-    this.value = this.getter();
-    this.deep = deep;
+    this.value = lazy === true ? undefined : this.getter();
+    this.deep = !!deep;
   }
 
   update() {
@@ -30,7 +35,7 @@ export default class StateManager {
   }
 
   update(keys, value) {
-    let cur = this;
+    let cur = this.tree;
     for (let i = 0, l = keys.length - 1; i < l; i++) {
       const key = keys[i];
       if (cur.constructor === Tree) {
@@ -44,6 +49,8 @@ export default class StateManager {
           }
           cur.isArray = typeof key === 'number';
           cur.members[key] = new Tree();
+        } else {
+          cur.hasMerge = false;
         }
         cur = cur.members[key];
       } else {
@@ -61,6 +68,7 @@ export default class StateManager {
       if (typeof cur.isArray !== 'boolean') {
         cur.isArray = typeof key === 'number';
       }
+      cur.hasMerge = false;
       handler = (key, v) => { cur.members[key] = new Leaf(v); };
     } else {
       handler = (key, v) => { cur[key] = v; };
@@ -95,12 +103,14 @@ export default class StateManager {
   }
 
   getValue() {
+    // todo set object <-> add key fail
     const result = {};
     this.rest = new Set(Object.keys(this.map));
     this.tree.getValue('', this.onTree, this.onLeaf, result);
     const subs = Array.from(this.subs);
     this.subs.clear();
     this.tree.members = {};
+    this.tree.hasMerge = false;
     return { result, subs };
   }
 
@@ -108,12 +118,11 @@ export default class StateManager {
     return this.tree.merge(data);
   }
 
-  add(name, getter, cb, deep) {
-    const watcher = new Watcher(getter, cb, deep);
-    if (this.map[name]) {
-      this.map[name].push(watcher);
+  add(depName, watcher) {
+    if (this.map[depName]) {
+      this.map[depName].push(watcher);
     } else {
-      this.map[name] = [watcher];
+      this.map[depName] = [watcher];
     }
     return watcher;
   }

@@ -1,3 +1,4 @@
+/* eslint-disable no-nested-ternary */
 /* eslint-disable no-param-reassign */
 
 export class Leaf {
@@ -10,13 +11,14 @@ export class Tree {
   constructor() {
     this.members = {};
     this.isArray = null;
+    this.hasMerge = false;
   }
 
   getValue(prefixKey, onTree, onLeaf, result) {
     const keys = Object.keys(this.members);
     for (let i = 0, l = keys.length; i < l; i++) {
       const key = keys[i];
-      const newKey = this.isArray ? `${prefixKey}[${key}]` : `${prefixKey}.${key}`;
+      const newKey = prefixKey ? (this.isArray ? `${prefixKey}[${key}]` : `${prefixKey}.${key}`) : key;
       const child = this.members[key];
       if (child.constructor === Tree) {
         onTree(newKey, this.isArray);
@@ -29,6 +31,8 @@ export class Tree {
   }
 
   merge(data) {
+    if (this.hasMerge) return data;
+    this.hasMerge = true;
     const result = this.isArray ? data.slice() : { ...data };
     const keys = Object.keys(this.members);
     for (let i = 0, l = keys.length; i < l; i++) {
