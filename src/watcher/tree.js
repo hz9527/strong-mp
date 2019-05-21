@@ -8,24 +8,23 @@ export class Leaf {
 }
 
 export class Tree {
-  constructor() {
+  constructor(isArray) {
     this.members = {};
-    this.isArray = null;
+    this.isArray = typeof isArray === 'boolean' ? isArray : null;
     this.hasMerge = false;
   }
 
-  getValue(prefixKey, onTree, onLeaf, result) {
+  walk(prefixKey, onTree, onLeaf) {
     const keys = Object.keys(this.members);
     for (let i = 0, l = keys.length; i < l; i++) {
       const key = keys[i];
       const newKey = prefixKey ? (this.isArray ? `${prefixKey}[${key}]` : `${prefixKey}.${key}`) : key;
       const child = this.members[key];
       if (child.constructor === Tree) {
-        onTree(newKey, this.isArray);
-        child.getValue(newKey, onTree, onLeaf, result);
+        onTree(newKey, child, key);
+        child.walk(newKey, onTree, onLeaf);
       } else {
-        onLeaf(newKey, child.value);
-        result[newKey] = child.value;
+        onLeaf(newKey, child, key);
       }
     }
   }

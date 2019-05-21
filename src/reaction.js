@@ -1,5 +1,7 @@
 import StateManager from './watcher/watcher';
+import { Tree } from './watcher/tree';
 import { initWatch, initComputed } from './helper';
+import { noop } from './utils';
 
 export default class Reaction {
   constructor() {
@@ -49,6 +51,11 @@ export default class Reaction {
   }
 
   setDeepState(keys, value, cb) {
+    if (process.env.NODE_ENV !== 'production') {
+      if (!this.isRun) {
+        console.time('debug');
+      }
+    }
     this.isRun = true;
     keys && this.stateManager.update(keys, value);
     typeof cb === 'function' && this.cbs.push(cb);
@@ -56,21 +63,29 @@ export default class Reaction {
   }
 
   run() {
-    let newData = {};
+    const result = new Tree(false);
     this.deps.forEach(item => item.push());
     this.push();
     while (this.isRun) {
       this.getState(); // todo call shouldUpdate hook
       this.isRun = false;
-      const { result, subs } = this.stateManager.getValue(newData); // todo
-      newData = result;
+      const subs = this.stateManager.getSubs(result);
+      subs.sort((a, b) => a.id - b.id);
       for (let i = 0, l = subs.length; i < l; i++) {
-        subs[i].update(); // todo sort & stack
+        subs[i].update();
       }
     }
     this.deps.forEach(item => item.pop());
     this.stack--;
+    const newData = {};
+    result.walk('', noop, (key, child) => {
+      newData[key] = child.value;
+    });
+    this.stateManager.cleanCache();
     console.log('setData:', newData);
+    if (process.env.NODE_ENV !== 'production') {
+      console.timeEnd('debug');
+    }
     this.setData(newData, this.runCbs);
     this.lastState = this.data;
   }

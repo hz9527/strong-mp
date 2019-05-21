@@ -17,6 +17,7 @@ Page(pageHandler({
   watch: {
     x: {
       handler(now, old) {
+        console.log('watch x', now, old)
         this.setState(getter => {
           const state = getter();
           console.log(state.a.b.c)
@@ -26,7 +27,7 @@ Page(pageHandler({
     },
     'a.b.c': {
       handler(now, old) {
-        console.log(now, old, 'watch2')
+        console.log(now, old, 'watch a.b.c')
       }
     }
   },
@@ -36,7 +37,7 @@ Page(pageHandler({
         this.setState(getter => {
           const state = getter();
           console.log(state.a.b.c)
-          return [['a', 'b', 'c'], 3]
+          return [['a', 'b', 'c'], 5]
         })
         this.setState(getter => {
           const state = getter();

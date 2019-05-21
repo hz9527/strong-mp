@@ -8,24 +8,23 @@ class Leaf {
 }
 
 class Tree {
-  constructor() {
+  constructor(isArray) {
     this.members = {};
-    this.isArray = null;
+    this.isArray = typeof isArray === 'boolean' ? isArray : null;
     this.hasMerge = false;
   }
 
-  getValue(prefixKey, onTree, onLeaf, result) {
+  walk(prefixKey, onTree, onLeaf) {
     const keys = Object.keys(this.members);
     for (let i = 0, l = keys.length; i < l; i++) {
       const key = keys[i];
       const newKey = prefixKey ? (this.isArray ? `${prefixKey}[${key}]` : `${prefixKey}.${key}`) : key;
       const child = this.members[key];
       if (child.constructor === Tree) {
-        onTree(newKey, this.isArray);
-        child.getValue(newKey, onTree, onLeaf, result);
+        onTree(newKey, child, key);
+        child.walk(newKey, onTree, onLeaf);
       } else {
-        onLeaf(newKey, child.value);
-        result[newKey] = child.value;
+        onLeaf(newKey, child, key);
       }
     }
   }
@@ -84,6 +83,12 @@ class Watcher {
   }
 }
 
+function copyTree(tree) {
+  const result = new Tree();
+  result.isArray = tree.isArray;
+  result.members = { ...tree.members };
+  return result;
+}
 
 class StateManager {
   constructor(isArray = false) {
@@ -91,6 +96,8 @@ class StateManager {
     this.subs = new Set(); // watchers
     this.rest = new Set(); // keys
     this.tree = new Tree(isArray);
+    this.cache = null;
+    this.cacheRoot = null;
     this.onTree = this.onTree.bind(this);
     this.onLeaf = this.onLeaf.bind(this);
   }
@@ -150,29 +157,49 @@ class StateManager {
     }
   }
 
-  onTree(key) {
+  onTree(key, tree, name) {
+    if (this.cache.constructor !== Tree) {
+      this.cache = this.cache[name];
+    } else if (this.cache.members[name] && this.cache.members[name].constructor === Leaf) {
+      this.cache = this.cache.members[name].value;
+    } else {
+      const copy = copyTree(tree);
+      this.cache.members[name] = copy;
+      this.cache = copy;
+    }
     const list = this.map[key];
     list && this.notify(key, list);
   }
 
-  onLeaf(key) {
+  onLeaf(key, leaf, name) {
     const keys = Array.from(this.rest);
     for (let i = 0, l = keys.length; i < l; i++) {
       const k = keys[i];
       k.indexOf(key) === 0 && this.notify(k, this.map[k]);
     }
+    if (this.cache.constructor !== Tree) {
+      this.cache[name] = leaf.value;
+    } else {
+      this.cache.members[name] = leaf;
+    }
+    this.cache = this.cacheRoot;
   }
 
-  getValue() {
-    // todo set object <-> add key fail
-    const result = {};
+  getSubs(tree) {
+    this.cache = tree;
+    this.cacheRoot = tree;
     this.rest = new Set(Object.keys(this.map));
-    this.tree.getValue('', this.onTree, this.onLeaf, result);
+    this.tree.walk('', this.onTree, this.onLeaf);
     const subs = Array.from(this.subs);
     this.subs.clear();
     this.tree.members = {};
     this.tree.hasMerge = false;
-    return { result, subs };
+    return subs;
+  }
+
+  cleanCache() {
+    this.cache = null;
+    this.cacheRoot = null;
   }
 
   merge(data) {
@@ -330,6 +357,11 @@ class Reaction {
   }
 
   setDeepState(keys, value, cb) {
+    {
+      if (!this.isRun) {
+        console.time('debug');
+      }
+    }
     this.isRun = true;
     keys && this.stateManager.update(keys, value);
     typeof cb === 'function' && this.cbs.push(cb);
@@ -337,21 +369,29 @@ class Reaction {
   }
 
   run() {
-    let newData = {};
+    const result = new Tree(false);
     this.deps.forEach(item => item.push());
     this.push();
     while (this.isRun) {
       this.getState(); // todo call shouldUpdate hook
       this.isRun = false;
-      const { result, subs } = this.stateManager.getValue(newData); // todo
-      newData = result;
+      const subs = this.stateManager.getSubs(result);
+      subs.sort((a, b) => a.id - b.id);
       for (let i = 0, l = subs.length; i < l; i++) {
-        subs[i].update(); // todo sort & stack
+        subs[i].update();
       }
     }
     this.deps.forEach(item => item.pop());
     this.stack--;
+    const newData = {};
+    result.walk('', noop, (key, child) => {
+      newData[key] = child.value;
+    });
+    this.stateManager.cleanCache();
     console.log('setData:', newData);
+    {
+      console.timeEnd('debug');
+    }
     this.setData(newData, this.runCbs);
     this.lastState = this.data;
   }
