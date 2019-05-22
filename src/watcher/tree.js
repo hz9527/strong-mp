@@ -11,7 +11,6 @@ export class Tree {
   constructor(isArray) {
     this.members = {};
     this.isArray = typeof isArray === 'boolean' ? isArray : null;
-    this.hasMerge = false;
   }
 
   walk(prefixKey, onTree, onLeaf) {
@@ -27,22 +26,5 @@ export class Tree {
         onLeaf(newKey, child, key);
       }
     }
-  }
-
-  merge(data) {
-    if (this.hasMerge) return data;
-    this.hasMerge = true;
-    const result = this.isArray ? data.slice() : { ...data };
-    const keys = Object.keys(this.members);
-    for (let i = 0, l = keys.length; i < l; i++) {
-      const key = keys[i];
-      const child = this.members[key];
-      if (child.constructor === Tree) {
-        result[key] = child.merge(data[key]);
-      } else {
-        result[key] = child.value;
-      }
-    }
-    return result;
   }
 }

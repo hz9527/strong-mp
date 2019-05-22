@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax */
 import { Tree, Leaf } from './tree';
 import { remove } from '../utils';
 
@@ -31,11 +32,13 @@ function copyTree(tree) {
 }
 
 export default class StateManager {
-  constructor(isArray = false) {
+  constructor(data = {}) {
     this.map = {}; // key: [watchers]
     this.subs = new Set(); // watchers
     this.rest = new Set(); // keys
-    this.tree = new Tree(isArray);
+    this.tree = new Tree(data.constructor === Array);
+    this.state = data;
+    this.data = data;
     this.cache = null;
     this.cacheRoot = null;
     this.onTree = this.onTree.bind(this);
@@ -44,9 +47,12 @@ export default class StateManager {
 
   update(keys, value) {
     let cur = this.tree;
+    this.state = cur.isArray ? this.state.slice() : { ...this.state };
+    let { state } = this;
     for (let i = 0, l = keys.length - 1; i < l; i++) {
       const key = keys[i];
       if (cur.constructor === Tree) {
+        const isArray = typeof keys[i + 1] === 'number';
         if (!cur.members[key]) {
           if (process.env.NODE_ENV !== 'production') {
             if (typeof cur.isArray === 'boolean') {
@@ -55,36 +61,40 @@ export default class StateManager {
               }
             }
           }
-          cur.isArray = typeof key === 'number';
-          cur.members[key] = new Tree();
-        } else {
-          cur.hasMerge = false;
+          cur.members[key] = new Tree(isArray);
         }
-        cur = cur.members[key];
+        const next = cur.members[key];
+        if (!state.hasOwnProperty(key)) {
+          state[key] = isArray ? [] : {};
+        } else {
+          state[key] = next.isArray ? state[key].slice() : { ...state[key] };
+        }
+        cur = next;
+        state = state[key];
       } else {
         if (process.env.NODE_ENV !== 'production') {
           if (!cur[key] || typeof cur[key] !== 'object') {
             console.error(`${key} is not in ${cur}`);
           }
         }
+        state[key] = state[key].constructor === Array ? state[key].slice() : { ...state[key] };
         cur = cur[key];
+        state[key] = cur;
       }
     }
     const rest = keys[keys.length - 1];
     let handler;
     if (cur.constructor === Tree) {
-      if (typeof cur.isArray !== 'boolean') {
-        cur.isArray = typeof key === 'number';
-      }
-      cur.hasMerge = false;
       handler = (key, v) => { cur.members[key] = new Leaf(v); };
     } else {
       handler = (key, v) => { cur[key] = v; };
     }
     if (rest.constructor !== Array) {
+      state[rest] = value;
       handler(rest, value);
     } else {
       for (let i = 0, l = rest.length; i < l; i++) {
+        state[rest[i]] = value[i];
         handler(rest[i], value[i]);
       }
     }
@@ -125,7 +135,7 @@ export default class StateManager {
     this.cache = this.cacheRoot;
   }
 
-  getSubs(tree) {
+  runLoop(tree) {
     this.cache = tree;
     this.cacheRoot = tree;
     this.rest = new Set(Object.keys(this.map));
@@ -133,18 +143,20 @@ export default class StateManager {
     const subs = Array.from(this.subs);
     this.subs.clear();
     this.tree.members = {};
-    this.tree.hasMerge = false;
     return subs;
   }
 
-  cleanCache() {
+  end() {
     this.cache = null;
     this.cacheRoot = null;
+    this.state = this.data;
   }
 
-  merge(data) {
-    return this.tree.merge(data);
+  resetData(data) {
+    this.data = data;
+    this.state = data;
   }
+
 
   add(depName, watcher) {
     if (this.map[depName]) {
@@ -155,9 +167,18 @@ export default class StateManager {
     return watcher;
   }
 
-  remove(name, watcher) {
-    const list = this.map[name];
-    list && remove(list, watcher);
+  remove(watchers) {
+    const keys = Object.keys(this.map);
+    for (let i = 0, l = keys.length; i < l; i++) {
+      for (const watcher of watchers.keys()) {
+        const list = this.map[keys[i]];
+        const ind = list.indexOf(watcher);
+        if (ind > -1) {
+          list.splice(ind, 1);
+          watchers.delete(watcher);
+        }
+      }
+    }
   }
 
   clear() {

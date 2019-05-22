@@ -11,7 +11,6 @@ class Tree {
   constructor(isArray) {
     this.members = {};
     this.isArray = typeof isArray === 'boolean' ? isArray : null;
-    this.hasMerge = false;
   }
 
   walk(prefixKey, onTree, onLeaf) {
@@ -28,31 +27,9 @@ class Tree {
       }
     }
   }
-
-  merge(data) {
-    if (this.hasMerge) return data;
-    this.hasMerge = true;
-    const result = this.isArray ? data.slice() : { ...data };
-    const keys = Object.keys(this.members);
-    for (let i = 0, l = keys.length; i < l; i++) {
-      const key = keys[i];
-      const child = this.members[key];
-      if (child.constructor === Tree) {
-        result[key] = child.merge(data[key]);
-      } else {
-        result[key] = child.value;
-      }
-    }
-    return result;
-  }
 }
 
 const noop = () => {};
-
-function remove(list, item) {
-  const ind = list.indexOf(item);
-  return ind > -1 ? list.splice(ind, 1) : item;
-}
 
 function pathToArr(str) {
   const preStr = str[0] === '[' ? str : `.${str}`;
@@ -60,6 +37,8 @@ function pathToArr(str) {
   const result = preStr.match(/(\[(\d+)\]|\.[^\.\[]+)/g) || [];
   return result.map(item => (item[0] === '[' ? Number(item.slice(1, -1)) : item.replace('.', '')));
 }
+
+/* eslint-disable no-restricted-syntax */
 
 let id = 0;
 class Watcher {
@@ -91,11 +70,13 @@ function copyTree(tree) {
 }
 
 class StateManager {
-  constructor(isArray = false) {
+  constructor(data = {}) {
     this.map = {}; // key: [watchers]
     this.subs = new Set(); // watchers
     this.rest = new Set(); // keys
-    this.tree = new Tree(isArray);
+    this.tree = new Tree(data.constructor === Array);
+    this.state = data;
+    this.data = data;
     this.cache = null;
     this.cacheRoot = null;
     this.onTree = this.onTree.bind(this);
@@ -104,9 +85,12 @@ class StateManager {
 
   update(keys, value) {
     let cur = this.tree;
+    this.state = cur.isArray ? this.state.slice() : { ...this.state };
+    let { state } = this;
     for (let i = 0, l = keys.length - 1; i < l; i++) {
       const key = keys[i];
       if (cur.constructor === Tree) {
+        const isArray = typeof keys[i + 1] === 'number';
         if (!cur.members[key]) {
           {
             if (typeof cur.isArray === 'boolean') {
@@ -115,36 +99,40 @@ class StateManager {
               }
             }
           }
-          cur.isArray = typeof key === 'number';
-          cur.members[key] = new Tree();
-        } else {
-          cur.hasMerge = false;
+          cur.members[key] = new Tree(isArray);
         }
-        cur = cur.members[key];
+        const next = cur.members[key];
+        if (!state.hasOwnProperty(key)) {
+          state[key] = isArray ? [] : {};
+        } else {
+          state[key] = next.isArray ? state[key].slice() : { ...state[key] };
+        }
+        cur = next;
+        state = state[key];
       } else {
         {
           if (!cur[key] || typeof cur[key] !== 'object') {
             console.error(`${key} is not in ${cur}`);
           }
         }
+        state[key] = state[key].constructor === Array ? state[key].slice() : { ...state[key] };
         cur = cur[key];
+        state[key] = cur;
       }
     }
     const rest = keys[keys.length - 1];
     let handler;
     if (cur.constructor === Tree) {
-      if (typeof cur.isArray !== 'boolean') {
-        cur.isArray = typeof key === 'number';
-      }
-      cur.hasMerge = false;
       handler = (key, v) => { cur.members[key] = new Leaf(v); };
     } else {
       handler = (key, v) => { cur[key] = v; };
     }
     if (rest.constructor !== Array) {
+      state[rest] = value;
       handler(rest, value);
     } else {
       for (let i = 0, l = rest.length; i < l; i++) {
+        state[rest[i]] = value[i];
         handler(rest[i], value[i]);
       }
     }
@@ -185,7 +173,7 @@ class StateManager {
     this.cache = this.cacheRoot;
   }
 
-  getSubs(tree) {
+  runLoop(tree) {
     this.cache = tree;
     this.cacheRoot = tree;
     this.rest = new Set(Object.keys(this.map));
@@ -193,18 +181,20 @@ class StateManager {
     const subs = Array.from(this.subs);
     this.subs.clear();
     this.tree.members = {};
-    this.tree.hasMerge = false;
     return subs;
   }
 
-  cleanCache() {
+  end() {
     this.cache = null;
     this.cacheRoot = null;
+    this.state = this.data;
   }
 
-  merge(data) {
-    return this.tree.merge(data);
+  resetData(data) {
+    this.data = data;
+    this.state = data;
   }
+
 
   add(depName, watcher) {
     if (this.map[depName]) {
@@ -215,9 +205,18 @@ class StateManager {
     return watcher;
   }
 
-  remove(name, watcher) {
-    const list = this.map[name];
-    list && remove(list, watcher);
+  remove(watchers) {
+    const keys = Object.keys(this.map);
+    for (let i = 0, l = keys.length; i < l; i++) {
+      for (const watcher of watchers.keys()) {
+        const list = this.map[keys[i]];
+        const ind = list.indexOf(watcher);
+        if (ind > -1) {
+          list.splice(ind, 1);
+          watchers.delete(watcher);
+        }
+      }
+    }
   }
 
   clear() {
@@ -240,11 +239,12 @@ function initComputed(computed, reaction, app) {
   const keys = Object.keys(computed);
   // eslint-disable-next-line no-param-reassign
   app.computed = {};
+  const getState = () => reaction.state;
   for (let i = 0, l = keys.length; i < l; i++) {
     const key = keys[i];
     // deps: [[key], [user, [key]]]
     const { deps, get } = computed[key];
-    const getter = get.bind(app, reaction.getValue);
+    const getter = get.bind(app, getState);
     const cb = now => reaction.setState({ [key]: now });
     const watcher = new Watcher({ getter, cb, lazy: true });
     Object.defineProperty(app.computed, key, {
@@ -285,10 +285,10 @@ function initWatch(watch, reaction, app) {
       reaction.userMap.set(stateManager, new Set());
     }
     const watchers = reaction.userMap.get(stateManager);
-    const source = user ? stateManager.getState : reaction.getState;
+    const source = user ? stateManager : reaction;
     const paths = pathToArr(key);
     const getter = () => {
-      let cur = source();
+      let cur = source.state;
       let j = 0;
       const len = paths.length;
       try {
@@ -309,20 +309,22 @@ function initWatch(watch, reaction, app) {
 
 // user add remove from stateManager; data from app
 
+/* eslint-disable no-restricted-syntax */
+
 class Reaction {
   constructor() {
     this.stack = 0;
     this.isRun = false;
     this.cbs = [];
     this.status = 0; // -1 hide 0 init 1 hasShow
-    this.lastState = null;
-    this.data = null;
-    this.stateManager = new StateManager(false);
     this.userMap = new Map(); // stateManager: [watcher]
     this.deps = new Set(); // <reaction>
     this.runCbs = this.runCbs.bind(this);
-    this.getState = this.getState.bind(this);
     this.setState = this.setState.bind(this);
+  }
+
+  get state() {
+    return this.stateManager.state;
   }
 
   init(app, opt) {
@@ -331,8 +333,7 @@ class Reaction {
         console.error(`${app.data} must be plain object`);
       }
     }
-    this.data = app.data;
-    this.lastState = this.data;
+    this.stateManager = new StateManager(app.data);
     this.setData = app.setData.bind(app);
     // eslint-disable-next-line no-param-reassign
     app.setState = this.setState;
@@ -345,7 +346,7 @@ class Reaction {
   }
 
   setState(newState, cb) {
-    const state = typeof newState === 'function' ? newState(this.getState) : newState;
+    const state = typeof newState === 'function' ? newState(this.state) : newState;
     if (!state) return;
     if (state.constructor === Object) {
       const keys = Object.keys(state);
@@ -371,29 +372,30 @@ class Reaction {
   run() {
     const result = new Tree(false);
     this.deps.forEach(item => item.push());
-    this.push();
-    while (this.isRun) {
-      this.getState(); // todo call shouldUpdate hook
-      this.isRun = false;
-      const subs = this.stateManager.getSubs(result);
-      subs.sort((a, b) => a.id - b.id);
-      for (let i = 0, l = subs.length; i < l; i++) {
-        subs[i].update();
-      }
-    }
+    this.stack++;
+    this.runLoop(result);
     this.deps.forEach(item => item.pop());
     this.stack--;
     const newData = {};
     result.walk('', noop, (key, child) => {
       newData[key] = child.value;
     });
-    this.stateManager.cleanCache();
     console.log('setData:', newData);
     {
       console.timeEnd('debug');
     }
     this.setData(newData, this.runCbs);
-    this.lastState = this.data;
+    this.stateManager.end();
+  }
+
+  runLoop(tree) {
+    this.isRun = false;
+    const subs = this.stateManager.runLoop(tree);
+    subs.sort((a, b) => a.id - b.id);
+    for (let i = 0, l = subs.length; i < l; i++) {
+      subs[i].update();
+    }
+    this.isRun && this.runLoop(tree);
   }
 
   runCbs() {
@@ -402,13 +404,6 @@ class Reaction {
     for (let i = 0, l = list.length; i < l; i++) {
       list[i]();
     }
-  }
-
-  getState() {
-    if (this.isRun) {
-      this.lastState = this.stateManager.merge(this.lastState);
-    }
-    return this.lastState;
   }
 
   push() {
@@ -429,9 +424,11 @@ class Reaction {
     this.status = -1;
   }
 
-  destory() {
-    // todo
-    console.log(this);
+  destory() { // todo remove app.setState
+    for (const connect of this.deps.keys()) {
+      connect.remove(this.userMap.get(connect));
+    }
+    this.stateManager.clear();
   }
 }
 

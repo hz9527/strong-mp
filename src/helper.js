@@ -15,11 +15,12 @@ export function initComputed(computed, reaction, app) {
   const keys = Object.keys(computed);
   // eslint-disable-next-line no-param-reassign
   app.computed = {};
+  const getState = () => reaction.state;
   for (let i = 0, l = keys.length; i < l; i++) {
     const key = keys[i];
     // deps: [[key], [user, [key]]]
     const { deps, get } = computed[key];
-    const getter = get.bind(app, reaction.getValue);
+    const getter = get.bind(app, getState);
     const cb = now => reaction.setState({ [key]: now });
     const watcher = new Watcher({ getter, cb, lazy: true });
     Object.defineProperty(app.computed, key, {
@@ -60,10 +61,10 @@ export function initWatch(watch, reaction, app) {
       reaction.userMap.set(stateManager, new Set());
     }
     const watchers = reaction.userMap.get(stateManager);
-    const source = user ? stateManager.getState : reaction.getState;
+    const source = user ? stateManager : reaction;
     const paths = pathToArr(key);
     const getter = () => {
-      let cur = source();
+      let cur = source.state;
       let j = 0;
       const len = paths.length;
       try {

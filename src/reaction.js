@@ -1,3 +1,5 @@
+/* eslint-disable no-restricted-syntax */
+/* eslint-disable no-undef */
 import StateManager from './watcher/watcher';
 import { Tree } from './watcher/tree';
 import { initWatch, initComputed } from './helper';
@@ -9,14 +11,14 @@ export default class Reaction {
     this.isRun = false;
     this.cbs = [];
     this.status = 0; // -1 hide 0 init 1 hasShow
-    this.lastState = null;
-    this.data = null;
-    this.stateManager = new StateManager(false);
     this.userMap = new Map(); // stateManager: [watcher]
     this.deps = new Set(); // <reaction>
     this.runCbs = this.runCbs.bind(this);
-    this.getState = this.getState.bind(this);
     this.setState = this.setState.bind(this);
+  }
+
+  get state() {
+    return this.stateManager.state;
   }
 
   init(app, opt) {
@@ -25,8 +27,7 @@ export default class Reaction {
         console.error(`${app.data} must be plain object`);
       }
     }
-    this.data = app.data;
-    this.lastState = this.data;
+    this.stateManager = new StateManager(app.data);
     this.setData = app.setData.bind(app);
     // eslint-disable-next-line no-param-reassign
     app.setState = this.setState;
@@ -39,7 +40,7 @@ export default class Reaction {
   }
 
   setState(newState, cb) {
-    const state = typeof newState === 'function' ? newState(this.getState) : newState;
+    const state = typeof newState === 'function' ? newState(this.state) : newState;
     if (!state) return;
     if (state.constructor === Object) {
       const keys = Object.keys(state);
@@ -65,29 +66,30 @@ export default class Reaction {
   run() {
     const result = new Tree(false);
     this.deps.forEach(item => item.push());
-    this.push();
-    while (this.isRun) {
-      this.getState(); // todo call shouldUpdate hook
-      this.isRun = false;
-      const subs = this.stateManager.getSubs(result);
-      subs.sort((a, b) => a.id - b.id);
-      for (let i = 0, l = subs.length; i < l; i++) {
-        subs[i].update();
-      }
-    }
+    this.stack++;
+    this.runLoop(result);
     this.deps.forEach(item => item.pop());
     this.stack--;
     const newData = {};
     result.walk('', noop, (key, child) => {
       newData[key] = child.value;
     });
-    this.stateManager.cleanCache();
     console.log('setData:', newData);
     if (process.env.NODE_ENV !== 'production') {
       console.timeEnd('debug');
     }
     this.setData(newData, this.runCbs);
-    this.lastState = this.data;
+    this.stateManager.end();
+  }
+
+  runLoop(tree) {
+    this.isRun = false;
+    const subs = this.stateManager.runLoop(tree);
+    subs.sort((a, b) => a.id - b.id);
+    for (let i = 0, l = subs.length; i < l; i++) {
+      subs[i].update();
+    }
+    this.isRun && this.runLoop(tree);
   }
 
   runCbs() {
@@ -96,13 +98,6 @@ export default class Reaction {
     for (let i = 0, l = list.length; i < l; i++) {
       list[i]();
     }
-  }
-
-  getState() {
-    if (this.isRun) {
-      this.lastState = this.stateManager.merge(this.lastState);
-    }
-    return this.lastState;
   }
 
   push() {
@@ -123,8 +118,10 @@ export default class Reaction {
     this.status = -1;
   }
 
-  destory() {
-    // todo
-    console.log(this);
+  destory() { // todo remove app.setState
+    for (const connect of this.deps.keys()) {
+      connect.remove(this.userMap.get(connect));
+    }
+    this.stateManager.clear();
   }
 }
